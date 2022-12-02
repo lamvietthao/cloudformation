@@ -1,0 +1,200 @@
+# 1 VPC, 2TGW Attachment Subnets, 1 TGW Attachment, 1 Private RouteTable, 1 PrivateRoute
+Mappings: #edit value below
+  DefinedParameters:
+    VPC:
+      VpcTagName: omnidoc-nonprod-vpc
+      VpcCidrBlock: 10.9.40.0/24
+    TGWAttachmentSubnets:
+      TGWAttachmentSubnet1TagName: omnidoc-nonprod-interfaces-subnet-1a
+      TGWAttachmentSubnet1CidrBlock:
+      TGWAttachmentSubnet2TagName: omnidoc-nonprod-interfaces-subnet-1b
+      TGWAttachmentSubnet2CidrBlock: 
+    PrivateSubnets:
+      PrivateSubnet1TagName: omnidoc-nonprod-subnet-1a
+      PrivateSubnet1CidrBlock: 
+      PrivateSubnet2TagName: omnidoc-nonprod-subnet-1b
+      PrivateSubnet2CidrBlock: 
+    TransitGatewayAttachment:
+      TransitGatewayAttachmentTagName: omnidoc-nonprod-tgw-attachment
+    PrivateRouteTable:
+      PrivateRouteTableTagName: omnidoc-nonprod-route-table
+
+Resources:
+# 01 VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+        CidrBlock: !FindInMap
+          - DefinedParameters
+          - VPC
+          - VpcCidrBlock
+        EnableDnsHostnames: true
+        EnableDnsSupport: true
+        InstanceTenancy: default
+        Tags:
+            - Key: Name
+              Value: !FindInMap
+              - DefinedParameters
+              - VPC
+              - VpcCidrTagName
+
+# 02 TGW Attachment Subnets
+  TGWAttachmentSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs ]
+      CidrBlock: !FindInMap
+          - DefinedParameters
+          - TGWAttachmentSubnets
+          - TGWAttachmentSubnet1CidrBlock
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !FindInMap
+          - DefinedParameters
+          - TGWAttachmentSubnets
+          - TGWAttachmentSubnet1TagName
+  TGWAttachmentSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs ]
+      CidrBlock: !FindInMap
+          - DefinedParameters
+          - TGWAttachmentSubnets
+          - TGWAttachmentSubnet2CidrBlock
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !FindInMap
+          - DefinedParameters
+          - TGWAttachmentSubnets
+          - TGWAttachmentSubnet2TagName
+# Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs ]
+      CidrBlock: !FindInMap
+          - DefinedParameters
+          - PrivateSubnets
+          - PrivateSubnet1CidrBlock
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !FindInMap
+          - DefinedParameters
+          - PrivateSubnets
+          - PrivateSubnet1TagName
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs ]
+      CidrBlock: !FindInMap
+          - DefinedParameters
+          - PrivateSubnets
+          - PrivateSubnet2CidrBlock
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !FindInMap
+          - DefinedParameters
+          - PrivateSubnets
+          - PrivateSubnet1TagName
+
+# 01 TGW Attachment
+  TransitGatewayAttachment:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      TransitGatewayId: tgw-06c1b4e9fe3a8286b
+      VpcId: !Ref VPC
+      SubnetIds:
+        - !Ref TGWAttachmentSubnet1
+        - !Ref TGWAttachmentSubnet2
+      Tags:
+        - Key: Name
+          Value: !FindInMap
+          - DefinedParameters
+          - TransitGatewayAttachment
+          - TransitGatewayAttachmentTagName
+
+# 01 Route Table
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !FindInMap
+          - DefinedParameters
+          - PrivateRouteTable
+          - PrivateRouteTableTagName
+  PrivateRoute1:            # Private route table to TGW
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      TransitGatewayId: tgw-06c1b4e9fe3a8286b
+
+# Associate TGWAttachmentSubnet to private route table
+  TGWAttachmentSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TGWAttachmentSubnet1
+      RouteTableId: !Ref PrivateRouteTable 
+  TGWAttachmentSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TGWAttachmentSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+# Associate PrivateSubnet to private route table
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable 
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+Outputs:
+  VPC:
+    Description: VPC information
+    Value: !Ref VPC
+  TGWAttachmentSubnet1:
+    Description: TGWAttachmentSubnet1 information
+    Value: !Ref TGWAttachmentSubnet1
+  TGWAttachmentSubnet2:
+    Description: TGWAttachmentSubnet2 information
+    Value: !Ref TGWAttachmentSubnet2
+  PrivateSubnet1:
+    Description: TGWAttachmentSubnet2 information
+    Value: !Ref PrivateSubnet1
+  PrivateSubnet2:
+    Description: TGWAttachmentSubnet2 information
+    Value: !Ref PrivateSubnet2
+  TransitGatewayAttachment:
+    Description: TransitGatewayAttachment information
+    Value: !Ref TransitGatewayAttachment
+  PrivateRouteTable:
+    Description: PrivateRouteTable information
+    Value: !Ref PrivateRouteTable
+  TGWAttachmentSubnet1RouteTableAssociation:
+    Description: TGWAttachmentSubnet1RouteTableAssociation information
+    Value: !Ref TGWAttachmentSubnet1RouteTableAssociation
+  TGWAttachmentSubnet2RouteTableAssociation:
+    Description: TGWAttachmentSubnet2RouteTableAssociation information
+    Value: !Ref TGWAttachmentSubnet2RouteTableAssociation
+  PrivateSubnet1RouteTableAssociation:
+    Description: PrivateSubnet1RouteTableAssociation information
+    Value: !Ref PrivateSubnet1RouteTableAssociation
+  PrivateSubnet2RouteTableAssociation:
+    Description: PrivateSubnet2RouteTableAssociation information
+    Value: !Ref PrivateSubnet2RouteTableAssociation
